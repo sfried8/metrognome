@@ -89,6 +89,7 @@ Java_com_friedman_metrognome_AudioPlayer_setMeasuresNative(JNIEnv *env, jobject 
         jclass measureClass = env->GetObjectClass(measureObj);
         jint timeSignatureTop = env->GetIntField(measureObj, env->GetFieldID(measureClass, "timeSignatureTop", "I"));
         jint timeSignatureBottom = env->GetIntField(measureObj, env->GetFieldID(measureClass, "timeSignatureBottom", "I"));
+        jboolean voiceEighths = env->GetBooleanField(measureObj, env->GetFieldID(measureClass, "voiceEighths", "Z"));
         jfieldID accentPatternFieldId = env->GetFieldID(measureClass, "accentPattern", "[I");
         auto accentPatternArray = (jintArray) env->GetObjectField(measureObj, accentPatternFieldId);
         jsize len2 = env->GetArrayLength(accentPatternArray);
@@ -99,7 +100,7 @@ Java_com_friedman_metrognome_AudioPlayer_setMeasuresNative(JNIEnv *env, jobject 
             accentPattern[j] = (EighthNoteGrouping) accentPatternIntVector[j];
         }
         env->ReleaseIntArrayElements(accentPatternArray, accentPatternIntArray, 0);
-        measureVec[i] = MeasureData{TimeSignature{(int)timeSignatureTop, (int)timeSignatureBottom}, accentPattern};
+        measureVec[i] = MeasureData{TimeSignature{(int)timeSignatureTop, (int)timeSignatureBottom}, accentPattern, (bool)voiceEighths};
     }
     sPlayer.setMeasures(measureVec);
     return (jint) Result::OK;

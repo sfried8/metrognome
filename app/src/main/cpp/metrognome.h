@@ -19,6 +19,7 @@ enum EighthNoteGrouping {
     DUPLE = 2,
     TRIPLE = 3
 };
+
 enum BeatType {
     SILENT,
     STRONG_ACCENT,
@@ -32,6 +33,7 @@ struct TimeSignature {
 struct MeasureData {
     TimeSignature timeSignature;
     std::vector<EighthNoteGrouping> eighthNoteGrouping;
+    bool voiceEighths;
 };
 class CountdownOscillator {
 public:
@@ -64,17 +66,18 @@ class Measure {
 public:
     TimeSignature mTimeSignature = {7, 8};
     Measure() : currentBeat(0), mAccentOsc(nullptr), mUnaccentOsc(nullptr), mStrongAccentOsc(nullptr), mTimeSignature(TimeSignature{7, 8}){}
-    void init(TimeSignature timeSignature, std::vector<EighthNoteGrouping> eighthNoteGrouping, CountdownOscillator *accentOsc, CountdownOscillator *unaccentOsc, CountdownOscillator *strongAccentOsc){
+    void init(TimeSignature timeSignature, std::vector<EighthNoteGrouping> eighthNoteGrouping, bool voiceEighths, CountdownOscillator *accentOsc, CountdownOscillator *unaccentOsc, CountdownOscillator *strongAccentOsc){
         mTimeSignature = timeSignature;
         mAccentOsc = accentOsc;
         mUnaccentOsc = unaccentOsc;
         mStrongAccentOsc = strongAccentOsc;
         if (timeSignature.bottom == 4) {
+            BeatType upBeat = voiceEighths ? UNACCENT : SILENT;
             mAccentPattern.push_back(STRONG_ACCENT);
-            mAccentPattern.push_back(SILENT);
+            mAccentPattern.push_back(upBeat);
             for (int i = 1; i < timeSignature.top; i++) {
                 mAccentPattern.push_back(ACCENT);
-                mAccentPattern.push_back(SILENT);
+                mAccentPattern.push_back(upBeat);
             }
         } else {
             mAccentPattern.push_back(STRONG_ACCENT);
@@ -89,6 +92,9 @@ public:
                 if (eighthNoteGrouping[i] == TRIPLE) {
                     mAccentPattern.push_back(UNACCENT);
                 }
+            }
+            while (mAccentPattern.size() < mTimeSignature.top) {
+                mAccentPattern.push_back(UNACCENT);
             }
         }
         currentBeat = 0;
@@ -135,21 +141,11 @@ public:
         } else {
             mOutputStage = &mMixer;
         }
-        TimeSignature commonTimeSignature = {4, 4};
-        TimeSignature sevenEight = {7, 8};
-        std::vector<EighthNoteGrouping> eightNoteGrouping = {DUPLE, DUPLE, TRIPLE};
-        std::vector<EighthNoteGrouping> eightNoteGrouping44 = {};
-        Measure m;
-        Measure n;
-        m.init(sevenEight, eightNoteGrouping, &accentOsc, &unaccentOsc, &strongAccentOsc);
-        n.init(commonTimeSignature, eightNoteGrouping44, &accentOsc, &unaccentOsc, &strongAccentOsc);
-        mMeasures.push_back(m);
-        mMeasures.push_back(n);
         currentMeasure = 0;
     }
     Measure createMeasure(const MeasureData& measureData) {
         Measure m;
-        m.init(measureData.timeSignature, measureData.eighthNoteGrouping, &accentOsc, &unaccentOsc, &strongAccentOsc);
+        m.init(measureData.timeSignature, measureData.eighthNoteGrouping, measureData.voiceEighths, &accentOsc, &unaccentOsc, &strongAccentOsc);
         return m;
     }
     // From IRenderableAudio
