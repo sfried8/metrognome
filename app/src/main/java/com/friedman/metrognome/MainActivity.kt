@@ -1,35 +1,61 @@
 package com.friedman.metrognome
 
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.animateIntOffsetAsState
+import androidx.compose.animation.core.animateOffsetAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.toMutableStateList
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import com.example.compose.MetrognomeTheme
+import kotlinx.coroutines.launch
+import kotlin.math.PI
+import kotlin.math.cos
+import kotlin.math.sin
 
 class MainActivity : ComponentActivity() {
 
@@ -145,7 +171,23 @@ fun MetrognomeScreen(modifier: Modifier = Modifier) {
     val mMeasures = remember {getMeasures().toMutableStateList()}
     val mIsPlaying = remember { mutableStateOf(false) }
     val mBpm = remember { mutableStateOf(120) }
+    val mActiveMeasure = remember { mutableStateOf(0) }
     val mShowingComposeDialog = remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    val metronomeCallback = object : MetronomeCallback {
+        override fun onMetronomeClick(measure: Int, beat: Int) {
+            mActiveMeasure.value = measure
+            if (beat == 0) {
+                val measureObject = mMeasures[measure]
+                Log.d("measure", "$measure : $beat")
+                Log.d("measure", measureObject.timeSignatureTop.toString())
+                val bps = mBpm.value / 60f
+                val mspb = 1000 / bps
+                val animationDuration = mspb * measureObject.timeSignatureTop
+                scope.launch {  measureObject.fairyDotState.play(animationDuration.toInt())}
+            }
+        }
+    }
     Column(modifier = modifier.padding(16.dp)) {
        BPMConfig(modifier, bpm = mBpm.value, onValueChange = { it -> mBpm.value = it
            if (mIsPlaying.value) {
@@ -157,7 +199,7 @@ fun MetrognomeScreen(modifier: Modifier = Modifier) {
            if (mIsPlaying.value) {
                AudioPlayer.setMeasures(mMeasures.toList().toTypedArray())
            }
-       })
+       }, activeMeasure = mActiveMeasure.value)
         Button(onClick = { mShowingComposeDialog.value = true}) {
             Text("Add Measure")
         }
@@ -175,7 +217,7 @@ fun MetrognomeScreen(modifier: Modifier = Modifier) {
 
             Button(
                 onClick = {
-                    AudioPlayer.startPlayback(true)
+                    AudioPlayer.startPlayback(true, metronomeCallback)
                     AudioPlayer.setMeasures(mMeasures.toList().toTypedArray())
                     AudioPlayer.setBpm(mBpm.value)
                     mIsPlaying.value = true
@@ -189,7 +231,7 @@ fun MetrognomeScreen(modifier: Modifier = Modifier) {
         } else {
             Button(
                 onClick = {
-                    AudioPlayer.startPlayback(false)
+                    AudioPlayer.startPlayback(false, metronomeCallback)
                     mIsPlaying.value = false
                 }
             ) {
@@ -289,19 +331,38 @@ modifier = modifier.height(48.dp).padding(4.dp)
     }
 }
 @Composable
-fun MeasureElement(measure: Measure, onClick: () -> Unit = {}) {
-        Button(onClick = onClick) {
+fun MeasureElement( modifier: Modifier = Modifier, measure: Measure, onClick: () -> Unit = {}) {
+        Button(onClick = onClick, modifier = modifier) {
             Column {
-        Text(text = measure.timeSignatureTop.toString())
-        Text(text = measure.timeSignatureBottom.toString())
-    }
+                Text(text = measure.timeSignatureTop.toString())
+                Text(text = measure.timeSignatureBottom.toString())
+            }
         }
+    FairyDot(measure.fairyDotState)
+}
+class FairyDotState() {
+    private val animatable = Animatable(0f)
+    val x: Float get() = 30.5f * cos(2* PI * animatable.value - PI/2).toFloat()
+    val y: Float get() = 30.5f * sin(2* PI * animatable.value - PI/2).toFloat()
+    suspend fun play(animationDuration: Int) {
+        animatable.snapTo(0f)
+        animatable.animateTo(1f, animationSpec =  tween(durationMillis = animationDuration, easing = LinearEasing))
+    }
 }
 @Composable
-fun MeasureElementList(measures: List<Measure>, onClickMeasure: (Measure) -> Unit = {}) {
+fun FairyDot(state: FairyDotState) {
+    Box(modifier = Modifier.offset(x = state.x.dp - 49.5.dp, y = state.y.dp + 30.5.dp)) {
+        Box(modifier = Modifier.size(19.dp).clip(CircleShape).border(1.5.dp, Color.Blue, CircleShape))
+    }
+
+}
+@Composable
+fun MeasureElementList(measures: List<Measure>, onClickMeasure: (Measure) -> Unit = {}, activeMeasure: Int) {
     LazyRow {
         items(measures) { measure ->
-            MeasureElement(measure = measure, onClick = { onClickMeasure(measure) })
+            MeasureElement(modifier = Modifier.size(80.dp), measure = measure, onClick = { onClickMeasure(measure) }
+
+            )
         }
 
 

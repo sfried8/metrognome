@@ -72,6 +72,10 @@ void MetronomeNoiseMaker::setMeasures(const std::vector<MeasureData>& measures) 
  }
  mAudioSource->mMeasures = measureObjects;
 }
+void MetronomeNoiseMaker::setMetronomeCallback(JavaVM *jvm, jobject metronomeCallback) {
+    mAudioSource->jvm = jvm;
+    mAudioSource->metronomeCallback = metronomeCallback;
+}
 void MetronomeNoiseMaker::restart() {
     stop();
     start();

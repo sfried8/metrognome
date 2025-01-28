@@ -7,6 +7,7 @@
 #include <oboe/Oboe.h>
 #include <array>
 #include <vector>
+#include <jni.h>
 #include "RenderableAudioSource.h"
 #include "DefaultDataCallback.h"
 #include "DefaultErrorCallback.h"
@@ -34,7 +35,9 @@ struct MeasureData {
     TimeSignature timeSignature;
     std::vector<EighthNoteGrouping> eighthNoteGrouping;
     bool voiceEighths;
+    void (*beatTick)(int);
 };
+
 class CountdownOscillator {
 public:
     void init(int sampleRate, float frequency, float amplitude, Mixer *mixer) {
@@ -116,8 +119,9 @@ public:
             return false;
         }
     }
-private:
+
     int currentBeat;
+private:
     CountdownOscillator *mStrongAccentOsc;
     CountdownOscillator *mAccentOsc;
     CountdownOscillator *mUnaccentOsc;
@@ -159,6 +163,7 @@ public:
         }
         if (currentFrame >= beatDelayFrames/2) {
             currentFrame %= (beatDelayFrames/2);
+            beatTick(currentMeasure, mMeasures[currentMeasure].currentBeat);
             bool completedMeasure = mMeasures[currentMeasure].eigthNoteBeat();
             if (completedMeasure) {
                 currentMeasure = (currentMeasure + 1) % (int)mMeasures.size();
@@ -167,7 +172,16 @@ public:
         mOutputStage->renderAudio(audioData, numFrames);
 
     };
-
+    void beatTick(int measure, int beat) {
+        JNIEnv* env;
+        jvm->AttachCurrentThread(&env, nullptr); // Attach the current thread to the JVM
+        jclass callbackClass = env->GetObjectClass(metronomeCallback);
+        jmethodID onMetronomeClickMethod = env->GetMethodID(callbackClass, "onMetronomeClick", "(II)V");
+        env->CallVoidMethod(metronomeCallback, onMetronomeClickMethod, measure, beat);
+        jvm->DetachCurrentThread(); //
+    }
+    JavaVM* jvm;
+    jobject metronomeCallback;
     ~Synth() override = default;
 private:
     // Rendering objects
@@ -197,6 +211,7 @@ public:
     oboe::Result close();
     void setBpm(int bpm);
     void setMeasures(const std::vector<MeasureData>& measures);
+    void setMetronomeCallback(JavaVM* jvm, jobject metronomeCallback);
     void restart() override;
 
 private:

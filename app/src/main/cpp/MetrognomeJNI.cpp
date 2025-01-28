@@ -38,19 +38,25 @@ using namespace oboe;
 
 // Use a static object so we don't have to worry about it getting deleted at the wrong time.
 static MetronomeNoiseMaker sPlayer;
-
+JavaVM *g_jvm;
+JNIEXPORT jint JNI_OnLoad(JavaVM* vm, void* reserved) {
+    g_jvm = vm;
+    return JNI_VERSION_1_6;
+}
 /**
  * Native (JNI) implementation of AudioPlayer.startAudiostreamNative()
  */
 JNIEXPORT jint JNICALL Java_com_friedman_metrognome_AudioPlayer_startAudioStreamNative(
-        JNIEnv * /* env */, jobject) {
+        JNIEnv *  env , jobject audioPlayer, jobject metronome_callback) {
     __android_log_print(ANDROID_LOG_INFO, TAG, "%s", __func__);
     Result result = sPlayer.open();
     if (result == Result::OK) {
         result = sPlayer.start();
-        sPlayer.setBpm(240);
 
     }
+    jobject callbackObject = env->NewGlobalRef(metronome_callback);
+
+    sPlayer.setMetronomeCallback(g_jvm, callbackObject);
     return (jint) result;
 }
 
@@ -90,6 +96,7 @@ Java_com_friedman_metrognome_AudioPlayer_setMeasuresNative(JNIEnv *env, jobject 
         jint timeSignatureTop = env->GetIntField(measureObj, env->GetFieldID(measureClass, "timeSignatureTop", "I"));
         jint timeSignatureBottom = env->GetIntField(measureObj, env->GetFieldID(measureClass, "timeSignatureBottom", "I"));
         jboolean voiceEighths = env->GetBooleanField(measureObj, env->GetFieldID(measureClass, "voiceEighths", "Z"));
+
         jfieldID accentPatternFieldId = env->GetFieldID(measureClass, "accentPattern", "[I");
         auto accentPatternArray = (jintArray) env->GetObjectField(measureObj, accentPatternFieldId);
         jsize len2 = env->GetArrayLength(accentPatternArray);
